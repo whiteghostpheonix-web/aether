@@ -4,12 +4,5 @@ rust_library(
     name = "aether_core",
     srcs = glob(["src/**/*.rs"]),
     edition = "2021",
-    deps = [
-        "@crates//:serde",
-        "@crates//:serde_json",
-        "@crates//:sha2",
-        "@crates//:hex",
-        "@crates//:log",
-    ],
     visibility = ["//visibility:public"],
 )
