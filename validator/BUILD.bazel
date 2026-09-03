@@ -1,0 +1,15 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary")
+
+rust_binary(
+    name = "aether_validator",
+    srcs = ["src/main.rs"],
+    edition = "2021",
+    deps = [
+        "//core:aether_core",
+        "@crates//:tokio",
+        "@crates//:clap",
+        "@crates//:log",
+        "@crates//:env_logger",
+    ],
+    visibility = ["//visibility:public"],
+)
