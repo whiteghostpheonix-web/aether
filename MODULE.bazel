@@ -1,0 +1,41 @@
+module(
+    name = "aether",
+    version = "1.0.0",
+)
+
+bazel_dep(name = "rules_rust", version = "0.67.0")
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2021",
+    versions = ["1.98.0"],
+)
+use_repo(rust, "rust_toolchains")
+
+crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate.specs(
+    package = "tokio",
+    version = "1.0",
+)
+crate.specs(
+    package = "serde",
+    version = "1.0",
+)
+crate.specs(
+    package = "serde_json",
+    version = "1.0",
+)
+crate.specs(
+    package = "clap",
+    version = "4.0",
+)
+crate.specs(
+    package = "log",
+    version = "0.4",
+)
+crate.specs(
+    package = "env_logger",
+    version = "0.10",
+)
+crate.from_specs()
+use_repo(crate, "crates")

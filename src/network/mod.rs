@@ -1,105 +1,136 @@
+//! AETHER P2P NETWORK
+//! Modern libp2p with SwarmBuilder
+
 use libp2p::{
-    swarm::{NetworkBehaviour, Swarm, SwarmEvent},
-    gossipsub::{Gossipsub, GossipsubConfig, IdentTopic},
-    identify::{Identify, IdentifyConfig},
-    mdns::{Mdns, MdnsConfig},
-    noise, tcp, yamux, PeerId, Transport,
+    swarm::{NetworkBehaviour, Swarm},
+    gossipsub::{self, IdentTopic},
+    identify, PeerId,
+    SwarmBuilder,
 };
+use libp2p::identity::Keypair;
+use libp2p::tcp;
+use libp2p::noise;
+use libp2p::yamux;
+use libp2p::core::upgrade;
 use futures::StreamExt;
+use std::error::Error;
+use log::{info, debug, warn};
 
-pub struct P2PNode {
-    pub peer_id: PeerId,
-    pub swarm: Swarm<AetherBehaviour>,
-}
-
+// ─── NETWORK BEHAVIOUR ──────────────────────────────────────
 #[derive(NetworkBehaviour)]
 pub struct AetherBehaviour {
-    pub gossipsub: Gossipsub,
-    pub identify: Identify,
-    pub mdns: Mdns,
+    pub gossipsub: gossipsub::Behaviour,
+    pub identify: identify::Behaviour,
 }
 
 impl AetherBehaviour {
-    pub fn new(peer_id: PeerId) -> Self {
+    pub fn new(keypair: &Keypair) -> Result<Self, Box<dyn Error>> {
         // Gossipsub config
-        let mut config = GossipsubConfig::default();
-        config.set_max_transmit_size(1024 * 1024); // 1MB
+        let gossipsub_config = gossipsub::Config::default();
+        let gossipsub = gossipsub::Behaviour::new(
+            gossipsub::MessageAuthenticity::Signed(keypair.clone()),
+            gossipsub_config,
+        )?;
 
-        let gossipsub = Gossipsub::new(
+        // Identify
+        let identify = identify::Behaviour::new(identify::Config::new(
             "aether/1.0.0".to_string(),
-            peer_id,
-            config,
-        ).unwrap();
-
-        // Identify protocol
-        let identify = Identify::new(IdentifyConfig::new(
-            "aether/1.0.0".to_string(),
+            keypair.public(),
         ));
 
-        // MDNS for local discovery
-        let mdns = Mdns::new(MdnsConfig::default()).unwrap();
-
-        Self {
+        Ok(Self {
             gossipsub,
             identify,
-            mdns,
-        }
+        })
     }
 
     pub fn subscribe_topics(&mut self) {
         let topics = vec!["blocks", "transactions", "consensus"];
         for topic in topics {
             let topic = IdentTopic::new(topic);
-            self.gossipsub.subscribe(&topic).unwrap();
-            println!("📡 Subscribed to topic: {}", topic.to_string());
+            if let Err(e) = self.gossipsub.subscribe(&topic) {
+                warn!("Failed to subscribe: {}", e);
+            } else {
+                info!("📡 Subscribed to topic: {}", topic);
+            }
         }
     }
 }
 
+// ─── P2P NODE ──────────────────────────────────────────────
+pub struct P2PNode {
+    pub peer_id: PeerId,
+    pub swarm: Swarm<AetherBehaviour>,
+}
+
 impl P2PNode {
-    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        // Generate keypair
-        let keypair = libp2p::identity::ed25519::Keypair::generate();
+    pub async fn new() -> Result<Self, Box<dyn Error>> {
+        let keypair = Keypair::generate_ed25519();
         let peer_id = PeerId::from(keypair.public());
 
-        println!("🆔 Peer ID: {}", peer_id);
+        info!("🆔 Peer ID: {}", peer_id);
 
-        // Create transport
-        let transport = libp2p::development_transport(keypair).await?;
+        // Build with modern SwarmBuilder
+        let mut swarm = SwarmBuilder::with_existing_identity(keypair.clone())
+            .with_tokio()
+            .with_tcp(
+                tcp::Config::default(),
+                |_| noise::Config::new(&keypair).unwrap(),
+                yamux::Config::default,
+            )?
+            .with_behaviour(|_| AetherBehaviour::new(&keypair).unwrap())?
+            .build();
 
-        // Create behaviour
-        let mut behaviour = AetherBehaviour::new(peer_id);
-        behaviour.subscribe_topics();
+        // Subscribe to topics
+        swarm.behaviour_mut().subscribe_topics();
 
-        // Create swarm
-        let swarm = Swarm::new(transport, behaviour, peer_id);
-
-        Ok(Self { peer_id, swarm })
+        Ok(Self {
+            peer_id,
+            swarm,
+        })
     }
 
-    pub async fn start(&mut self, address: &str) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn start(&mut self, address: &str) -> Result<(), Box<dyn Error>> {
         let addr = address.parse()?;
         self.swarm.listen_on(addr)?;
-
-        println!("🌐 Listening on: {}", address);
+        info!("🌐 Listening on: {}", address);
 
         loop {
             tokio::select! {
                 event = self.swarm.next() => {
                     match event {
-                        Some(SwarmEvent::NewListenAddr { address, .. }) => {
-                            println!("🔊 Listening on: {}", address);
+                        Some(libp2p::swarm::SwarmEvent::NewListenAddr { address, .. }) => {
+                            info!("🔊 Listening on: {}", address);
                         }
-                        Some(SwarmEvent::ConnectionEstablished { peer_id, .. }) => {
-                            println!("🔗 Connected to: {}", peer_id);
+                        Some(libp2p::swarm::SwarmEvent::ConnectionEstablished { peer_id, .. }) => {
+                            info!("🔗 Connected to: {}", peer_id);
                         }
-                        Some(SwarmEvent::ConnectionClosed { peer_id, .. }) => {
-                            println!("🔌 Disconnected: {}", peer_id);
+                        Some(libp2p::swarm::SwarmEvent::ConnectionClosed { peer_id, .. }) => {
+                            info!("🔌 Disconnected: {}", peer_id);
+                        }
+                        Some(libp2p::swarm::SwarmEvent::Behaviour(event)) => {
+                            debug!("📨 Event: {:?}", event);
                         }
                         _ => {}
                     }
                 }
             }
         }
+    }
+
+    pub fn get_peer_id(&self) -> &PeerId {
+        &self.peer_id
+    }
+
+    pub fn subscribe_topic(&mut self, topic: &str) -> Result<(), Box<dyn Error>> {
+        let topic = IdentTopic::new(topic);
+        self.swarm.behaviour_mut().gossipsub.subscribe(&topic)?;
+        Ok(())
+    }
+
+    pub fn publish(&mut self, topic: &str, data: Vec<u8>) -> Result<(), Box<dyn Error>> {
+        let topic = IdentTopic::new(topic);
+        self.swarm.behaviour_mut().gossipsub.publish(topic, data)?;
+        Ok(())
     }
 }
