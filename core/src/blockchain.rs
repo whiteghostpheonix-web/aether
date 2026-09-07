@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use log::{info, warn, debug};
+use log::{info, warn};
 use crate::transaction::{Transaction, Block, BlockHeader};
 use crate::state::State;
 use crate::types::{Address, Hash};
-use crate::state::State;
 
 pub struct ChainConfig {
     pub block_time: u64,
@@ -60,23 +59,19 @@ impl Blockchain {
     }
 
     pub fn submit_transaction(&mut self, tx: Transaction) -> Result<Hash, String> {
-        // 1. Verify signature
         if !tx.verify(&tx.from) {
             return Err("Invalid signature".to_string());
         }
 
-        // 2. Check nonce
         let expected_nonce = self.state.nonces.get(&tx.from).unwrap_or(&0);
         if tx.nonce != *expected_nonce {
             return Err(format!("Invalid nonce: expected {}, got {}", expected_nonce, tx.nonce));
         }
 
-        // 3. Check daily quota (NO GAS!)
         if !self.state.check_daily_quota(&tx.from) {
             return Err("Daily quota exceeded (1000 free transactions)".to_string());
         }
 
-        // 4. Add to pending
         let tx_hash = tx.hash();
         self.pending_transactions.push(tx);
         info!("✅ Transaction added: {}", hex::encode(&tx_hash));
@@ -95,7 +90,6 @@ impl Blockchain {
             .take(self.config.max_block_size)
             .collect();
 
-        // Apply transactions to state
         for tx in &transactions {
             if tx.is_transfer() {
                 if let Err(e) = self.state.apply_transfer(tx) {
@@ -124,7 +118,6 @@ impl Blockchain {
     }
 
     pub fn add_block(&mut self, block: Block) -> Result<(), String> {
-        // Verify block
         self.verify_block(&block)?;
         self.chain.push(block);
         info!("📦 Block #{} added to chain", self.chain.len() - 1);
@@ -132,13 +125,11 @@ impl Blockchain {
     }
 
     fn verify_block(&self, block: &Block) -> Result<(), String> {
-        // Check previous hash
         let last_hash = self.chain.last().unwrap().header.hash();
         if block.header.previous_hash != last_hash {
             return Err("Invalid previous hash".to_string());
         }
 
-        // Check merkle root
         let calculated_root = self.calculate_merkle_root(&block.transactions);
         if block.header.merkle_root != calculated_root {
             return Err("Invalid merkle root".to_string());

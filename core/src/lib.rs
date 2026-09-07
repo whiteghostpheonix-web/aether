@@ -1,7 +1,6 @@
 pub mod blockchain;
 pub mod transaction;
 pub mod state;
-pub mod crypto;
 pub mod types;
 
 pub use blockchain::Blockchain;

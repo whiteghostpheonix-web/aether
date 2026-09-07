@@ -1,0 +1,12 @@
+[package]
+name = "aether-network"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aether-core = { path = "../core" }
+libp2p = { version = "0.53", features = ["tokio", "tcp", "dns", "noise", "yamux", "gossipsub", "identify", "macros"] }
+tokio = { version = "1.0", features = ["full"] }
+futures = "0.3"
+log = "0.4"
+anyhow = "1.0"

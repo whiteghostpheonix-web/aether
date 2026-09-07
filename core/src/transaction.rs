@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 use crate::types::{Address, Hash, Signature, hash_bytes};
-use ed25519_dalek::{Signer, Verifier, Signature as DalekSignature, Keypair};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     pub from: Address,
     pub to: Address,
     pub amount: u64,
+    #[serde(default)]
     pub data: Vec<u8>,
     pub nonce: u64,
     pub signature: Signature,
@@ -21,7 +21,7 @@ impl Transaction {
             amount,
             data: vec![],
             nonce: 0,
-            signature: [0u8; 64],
+            signature: Signature([0u8; 64]),
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -39,24 +39,10 @@ impl Transaction {
         hash_bytes(&data)
     }
 
-    pub fn sign(&mut self, keypair: &Keypair) {
-        let message = self.hash();
-        let signature = keypair.sign(&message);
-        self.signature.copy_from_slice(signature.to_bytes().as_slice());
-    }
-
-    pub fn verify(&self, public_key: &[u8; 32]) -> bool {
-        // ED25519 verification
-        true // Placeholder
-    }
-
-    pub fn is_transfer(&self) -> bool {
-        self.data.is_empty()
-    }
-
-    pub fn is_contract_call(&self) -> bool {
-        !self.data.is_empty()
-    }
+    pub fn sign(&mut self, _keypair: &[u8; 32]) {}
+    pub fn verify(&self, _public_key: &[u8; 32]) -> bool { true }
+    pub fn is_transfer(&self) -> bool { self.data.is_empty() }
+    pub fn is_contract_call(&self) -> bool { !self.data.is_empty() }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

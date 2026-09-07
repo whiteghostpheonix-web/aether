@@ -21,10 +21,10 @@ impl State {
     }
 
     pub fn apply_transfer(&mut self, tx: &Transaction) -> Result<(), String> {
-        let from_balance = self.balances.get(&tx.from).unwrap_or(&0);
-        let to_balance = self.balances.get(&tx.to).unwrap_or(&0);
+        let from_balance = *self.balances.get(&tx.from).unwrap_or(&0);
+        let to_balance = *self.balances.get(&tx.to).unwrap_or(&0);
 
-        if *from_balance < tx.amount {
+        if from_balance < tx.amount {
             return Err("Insufficient balance".to_string());
         }
 
@@ -44,7 +44,7 @@ impl State {
 
     pub fn check_daily_quota(&self, address: &Address) -> bool {
         let usage = self.daily_usage.get(address).unwrap_or(&0);
-        *usage < 1000 // 1000 free transactions per day
+        *usage < 1000
     }
 
     pub fn increment_daily_usage(&mut self, address: &Address) {
