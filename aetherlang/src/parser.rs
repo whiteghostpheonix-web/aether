@@ -1,4 +1,5 @@
 //! AETHERLANG PARSER
+//! Parses tokens into AST
 
 use super::lexer::{Lexer, Token};
 
@@ -27,10 +28,7 @@ pub struct FunctionDecl {
 
 #[derive(Debug, Clone)]
 pub enum Type {
-    U64,
-    Address,
-    Bool,
-    String,
+    U64, Address, Bool, String,
     Map(Box<Type>, Box<Type>),
     List(Box<Type>),
 }
@@ -50,13 +48,12 @@ pub enum Expression {
     Identifier(String),
     Binary { left: Box<Expression>, op: Operator, right: Box<Expression> },
     FunctionCall { name: String, args: Vec<Expression> },
+    MethodCall { object: Box<Expression>, method: String, args: Vec<Expression> },
 }
 
 #[derive(Debug, Clone)]
 pub enum Literal {
-    Integer(u64),
-    String(String),
-    Bool(bool),
+    Integer(u64), String(String), Bool(bool),
 }
 
 #[derive(Debug, Clone)]
@@ -98,15 +95,9 @@ impl Parser {
         
         while self.peek() != Token::RBrace && self.peek() != Token::EOF {
             match self.peek() {
-                Token::Let => {
-                    states.push(self.parse_state());
-                }
-                Token::Func | Token::View => {
-                    functions.push(self.parse_function());
-                }
-                _ => {
-                    self.pos += 1;
-                }
+                Token::Let => states.push(self.parse_state()),
+                Token::Func | Token::View => functions.push(self.parse_function()),
+                _ => { self.pos += 1; }
             }
         }
         
@@ -153,7 +144,6 @@ impl Parser {
         }
         
         self.expect(Token::RParen);
-        
         let return_type = if self.peek() == Token::Arrow {
             self.pos += 1;
             Some(self.parse_type())
@@ -172,7 +162,7 @@ impl Parser {
     }
 
     fn parse_type(&mut self) -> Type {
-        match self.tokens[self.pos].clone() {
+        match self.peek() {
             Token::U64 => { self.pos += 1; Type::U64 }
             Token::Address => { self.pos += 1; Type::Address }
             Token::Bool => { self.pos += 1; Type::Bool }

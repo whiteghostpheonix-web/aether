@@ -13,4 +13,3 @@ pub use compiler::Compiler;
 pub use vm::VM;
 pub use vm::VMConfig;
 pub use vm::Value;
-pub use vm::OpCode;

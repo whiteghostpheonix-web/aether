@@ -1,6 +1,7 @@
 //! AETHERLANG COMPILER
+//! Generates bytecode from AST
 
-use super::parser::{Contract, FunctionDecl, Statement, Expression, Type};
+use super::parser::{Contract, FunctionDecl, Statement, Expression, Type, Operator, Literal};
 
 pub struct Compiler {
     pub bytecode: Vec<u8>,
@@ -18,11 +19,12 @@ impl Compiler {
             self.compile_function(function);
         }
         
-        self.bytecode.push(0xFF);
+        self.bytecode.push(0xFF); // Halt
         self.bytecode.clone()
     }
 
     fn compile_function(&mut self, function: &FunctionDecl) {
+        // Function header
         for statement in &function.body {
             self.compile_statement(statement);
         }
@@ -31,24 +33,24 @@ impl Compiler {
 
     fn compile_statement(&mut self, statement: &Statement) {
         match statement {
-            Statement::Assignment { name: _, expr } => {
+            Statement::Assignment { name, expr } => {
                 self.compile_expression(expr);
-                self.bytecode.push(0x31);
-                self.bytecode.extend_from_slice(&0u16.to_le_bytes());
+                self.bytecode.push(0x31); // Store
+                // Store variable index would go here
             }
             Statement::If { condition, then_body, else_body } => {
                 self.compile_expression(condition);
                 let jump_pos = self.bytecode.len();
-                self.bytecode.push(0x40);
-                self.bytecode.extend_from_slice(&0usize.to_le_bytes());
+                self.bytecode.push(0x40); // JumpIfFalse
+                self.bytecode.extend_from_slice(&[0u8; 8]);
                 
                 for stmt in then_body {
                     self.compile_statement(stmt);
                 }
                 
                 let else_pos = self.bytecode.len();
-                self.bytecode.push(0x42);
-                self.bytecode.extend_from_slice(&0usize.to_le_bytes());
+                self.bytecode.push(0x42); // Jump
+                self.bytecode.extend_from_slice(&[0u8; 8]);
                 
                 let end_pos = self.bytecode.len();
                 let offset = (end_pos - jump_pos - 9) as u64;
@@ -67,21 +69,18 @@ impl Compiler {
             Statement::Return { expr } => {
                 if let Some(e) = expr {
                     self.compile_expression(e);
-                } else {
-                    self.bytecode.push(0x01);
-                    self.bytecode.extend_from_slice(&0u64.to_le_bytes());
                 }
                 self.bytecode.push(0x50);
             }
-            Statement::Emit { event: _, args } => {
+            Statement::Emit { event, args } => {
                 for arg in args {
                     self.compile_expression(arg);
                 }
-                self.bytecode.push(0x60);
+                self.bytecode.push(0x60); // Emit
             }
             Statement::Expression(expr) => {
                 self.compile_expression(expr);
-                self.bytecode.push(0x02);
+                self.bytecode.push(0x02); // Pop
             }
         }
     }
@@ -91,13 +90,13 @@ impl Compiler {
             Expression::Literal(lit) => {
                 self.bytecode.push(0x01);
                 let value = match lit {
-                    super::parser::Literal::Integer(n) => *n,
-                    super::parser::Literal::Bool(b) => if *b { 1 } else { 0 },
-                    super::parser::Literal::String(s) => s.len() as u64,
+                    Literal::Integer(n) => *n,
+                    Literal::Bool(b) => if *b { 1 } else { 0 },
+                    Literal::String(s) => s.len() as u64,
                 };
                 self.bytecode.extend_from_slice(&value.to_le_bytes());
             }
-            Expression::Identifier(_) => {
+            Expression::Identifier(name) => {
                 self.bytecode.push(0x30);
                 self.bytecode.extend_from_slice(&0u16.to_le_bytes());
             }
@@ -105,21 +104,28 @@ impl Compiler {
                 self.compile_expression(left);
                 self.compile_expression(right);
                 let op_byte = match op {
-                    super::parser::Operator::Add => 0x10,
-                    super::parser::Operator::Sub => 0x11,
-                    super::parser::Operator::Mul => 0x12,
-                    super::parser::Operator::Div => 0x13,
-                    super::parser::Operator::Mod => 0x14,
-                    super::parser::Operator::Eq => 0x20,
-                    super::parser::Operator::Ne => 0x21,
-                    super::parser::Operator::Lt => 0x22,
-                    super::parser::Operator::Lte => 0x23,
-                    super::parser::Operator::Gt => 0x24,
-                    super::parser::Operator::Gte => 0x25,
+                    Operator::Add => 0x10,
+                    Operator::Sub => 0x11,
+                    Operator::Mul => 0x12,
+                    Operator::Div => 0x13,
+                    Operator::Mod => 0x14,
+                    Operator::Eq => 0x20,
+                    Operator::Ne => 0x21,
+                    Operator::Lt => 0x22,
+                    Operator::Lte => 0x23,
+                    Operator::Gt => 0x24,
+                    Operator::Gte => 0x25,
                 };
                 self.bytecode.push(op_byte);
             }
-            Expression::FunctionCall { name: _, args } => {
+            Expression::FunctionCall { name, args } => {
+                for arg in args {
+                    self.compile_expression(arg);
+                }
+                self.bytecode.push(0x50);
+            }
+            Expression::MethodCall { object, method, args } => {
+                self.compile_expression(object);
                 for arg in args {
                     self.compile_expression(arg);
                 }

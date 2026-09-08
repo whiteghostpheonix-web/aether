@@ -1,5 +1,5 @@
 //! AETHERLANG LEXER
-//! Tokenizes source code
+//! Tokenizes source code into tokens
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
@@ -16,9 +16,8 @@ pub enum Token {
     LParen, RParen, LBrace, RBrace, LBracket, RBracket,
     LAngle, RAngle,
     // Literals
-    Integer(u64), StringLit(String), BoolLit(bool), AddressLit(String),
+    Integer(u64), StringLit(String), BoolLit(bool),
     Identifier(String),
-    // Special
     EOF,
 }
 
@@ -85,10 +84,7 @@ impl Lexer {
             '0'..='9' => self.read_number(),
             '"' => self.read_string(),
             'a'..='z' | 'A'..='Z' | '_' => self.read_identifier(),
-            _ => {
-                self.pos += 1;
-                Token::EOF
-            }
+            _ => { self.pos += 1; Token::EOF }
         }
     }
 
@@ -115,8 +111,7 @@ impl Lexer {
             self.pos += 1;
         }
         let num_str: String = self.chars[start..self.pos].iter().collect();
-        let num = num_str.parse::<u64>().unwrap_or(0);
-        Token::Integer(num)
+        Token::Integer(num_str.parse().unwrap_or(0))
     }
 
     fn read_string(&mut self) -> Token {
