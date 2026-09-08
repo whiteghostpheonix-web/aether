@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aether-global
+  namespace: aether
+data:
+  regions: |
+    us-east: 100
+    us-west: 80
+    eu-west: 100
+    ap-southeast: 80
+    ap-northeast: 60
+    sa-east: 40
+    af-south: 30
+    me-south: 30
+  total_validators: "520"

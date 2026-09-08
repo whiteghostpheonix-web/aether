@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aether-validator
+  namespace: aether
+spec:
+  replicas: 100
+  selector:
+    matchLabels:
+      app: aether-validator
+  template:
+    metadata:
+      labels:
+        app: aether-validator
+    spec:
+      containers:
+      - name: validator
+        image: aether/validator:latest
+        args: ["--address", "0.0.0.0:8000", "--validator", "--stake", "1000"]
+        ports:
+        - containerPort: 8000
+        env:
+        - name: RUST_LOG
+          value: "info"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aether-validator
+  namespace: aether
+spec:
+  selector:
+    app: aether-validator
+  ports:
+  - port: 8000
+    targetPort: 8000
+  type: LoadBalancer
