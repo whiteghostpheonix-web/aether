@@ -1,26 +1,36 @@
 import React, { useState, useEffect } from 'react';
+import './App.css';
+import { loadWallet, generateWallet, saveWallet } from './wallet';
 
 const API_URL = 'https://aether-api.whiteghostpheonix.workers.dev';
 
 function App() {
-  const [address, setAddress] = useState('');
+  const [wallet, setWallet] = useState(null);
   const [balance, setBalance] = useState(1000);
   const [toAddress, setToAddress] = useState('');
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState('success');
   const [loading, setLoading] = useState(false);
   const [transactions, setTransactions] = useState([]);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const randomAddr = '0x' + Array.from({length: 40}, () => 
-      Math.floor(Math.random() * 16).toString(16)
-    ).join('');
-    setAddress(randomAddr);
+    const w = loadWallet();
+    setWallet(w);
+    setBalance(1000 + Math.floor(Math.random() * 9000));
   }, []);
+
+  const copyAddress = () => {
+    navigator.clipboard.writeText(wallet.address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const sendTransaction = async () => {
     if (!toAddress || !amount) {
       setMessage('❌ Please fill in all fields');
+      setMessageType('error');
       return;
     }
 
@@ -32,7 +42,7 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: address,
+          from: wallet.address,
           to: toAddress,
           amount: parseInt(amount),
           currency: 'AETH',
@@ -43,6 +53,7 @@ function App() {
       
       if (response.ok) {
         setMessage(`✅ Sent ${amount} AETH! Gas: 0 (FREE!)`);
+        setMessageType('success');
         setTransactions([...transactions, {
           to: toAddress,
           amount: amount,
@@ -54,118 +65,162 @@ function App() {
         setBalance(balance - parseInt(amount));
       } else {
         setMessage(`❌ Failed: ${data.message || 'Unknown error'}`);
+        setMessageType('error');
       }
     } catch (error) {
       setMessage(`❌ Network error: ${error.message}`);
+      setMessageType('error');
     } finally {
       setLoading(false);
     }
   };
 
-  const getBalance = async () => {
-    try {
-      const response = await fetch(`${API_URL}/balance?address=${address}`);
-      const data = await response.json();
-      setBalance(data.balance || 1000);
-      setMessage(`✅ Balance: ${data.balance || 1000} AETH`);
-    } catch (error) {
-      setMessage('❌ Using local balance');
-    }
+  const getNewWallet = () => {
+    const newWallet = generateWallet();
+    saveWallet(newWallet);
+    setWallet(newWallet);
+    setTransactions([]);
+    setBalance(1000 + Math.floor(Math.random() * 9000));
+    setMessage('✅ New anonymous wallet generated!');
+    setMessageType('success');
   };
 
+  if (!wallet) return <div className="app">Loading...</div>;
+
   return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <h1 style={styles.title}>⚡ AETHER WALLET</h1>
-        <p style={styles.subtitle}>100% Gas-Free</p>
+    <div className="app">
+      <header className="header">
+        <div className="logo">
+          <span className="logo-icon">⚡</span>
+          <span className="logo-text">AETHER</span>
+        </div>
+        <span className="badge">100% FREE</span>
       </header>
 
-      <div style={styles.card}>
-        <div style={styles.balanceRow}>
-          <span style={styles.balanceLabel}>Balance</span>
-          <span style={styles.balanceAmount}>{balance} AETH</span>
+      <div className="container">
+        {/* Balance Card */}
+        <div className="card balance-card">
+          <div className="balance-label">Total Balance</div>
+          <div className="balance-amount">
+            {balance}<span className="balance-currency">AETH</span>
+          </div>
+          
+          <div className="address-display">
+            <span>{wallet.address}</span>
+            <button className="copy-btn" onClick={copyAddress}>
+              {copied ? '✅ Copied' : '📋 Copy'}
+            </button>
+          </div>
+
+          <div className="wallet-actions">
+            <button className="action-btn" onClick={getNewWallet}>
+              🔄 New Wallet
+            </button>
+            <button className="action-btn" onClick={() => setBalance(balance + 100)}>
+              💰 Add 100
+            </button>
+          </div>
         </div>
-        <div style={styles.addressSection}>
-          <span style={styles.addressLabel}>Your Address</span>
-          <span style={styles.addressValue}>{address}</span>
-        </div>
-        <button onClick={getBalance} style={styles.refreshBtn}>🔄 Refresh</button>
-      </div>
 
-      <div style={styles.card}>
-        <h3>Send AETH</h3>
-        <p style={styles.gasFree}>⛽ Gas: 0 AETH (FREE!)</p>
+        {/* Send Card */}
+        <div className="card">
+          <h3 className="card-title">Send AETH</h3>
+          <div className="gas-badge">Gas: 0 AETH (FREE!)</div>
 
-        <input
-          type="text"
-          placeholder="Recipient Address (0x...)"
-          value={toAddress}
-          onChange={(e) => setToAddress(e.target.value)}
-          style={styles.input}
-        />
-        <input
-          type="number"
-          placeholder="Amount (AETH)"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          style={styles.input}
-        />
+          <div className="input-group">
+            <label className="input-label">Recipient Address</label>
+            <input
+              type="text"
+              className="input"
+              placeholder="0x..."
+              value={toAddress}
+              onChange={(e) => setToAddress(e.target.value)}
+            />
+          </div>
 
-        <button
-          onClick={sendTransaction}
-          disabled={loading}
-          style={{...styles.sendBtn, ...(loading ? styles.disabled : {})}}
-        >
-          {loading ? 'Sending...' : '🚀 Send (FREE)'}
-        </button>
+          <div className="input-group">
+            <label className="input-label">Amount (AETH)</label>
+            <input
+              type="number"
+              className="input"
+              placeholder="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
 
-        {message && <p style={styles.message}>{message}</p>}
-      </div>
+          <button
+            className="send-btn"
+            onClick={sendTransaction}
+            disabled={loading}
+          >
+            {loading ? '⏳ Sending...' : '🚀 Send (FREE)'}
+          </button>
 
-      <div style={styles.card}>
-        <h3>Recent Transactions</h3>
-        {transactions.length === 0 ? (
-          <p style={styles.empty}>No transactions yet</p>
-        ) : (
-          transactions.slice(-5).reverse().map((tx, i) => (
-            <div key={i} style={styles.txItem}>
-              <span>→ {tx.to.slice(0, 10)}...</span>
-              <span>{tx.amount} AETH</span>
-              <span style={styles.txTime}>{tx.time}</span>
+          {message && (
+            <div className={`message ${messageType}`}>
+              {message}
             </div>
-          ))
-        )}
-      </div>
+          )}
+        </div>
 
-      <footer style={styles.footer}>
-        <p>⚡ AETHER - Built to be FREE. Forever.</p>
-      </footer>
+        {/* Transactions */}
+        <div className="card">
+          <h3 className="card-title">Recent Transactions</h3>
+          {transactions.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-icon">📭</div>
+              <p>No transactions yet</p>
+            </div>
+          ) : (
+            <div className="tx-list">
+              {transactions.slice(-5).reverse().map((tx, i) => (
+                <div key={i} className="tx-item">
+                  <div className="tx-icon">🚀</div>
+                  <div className="tx-details">
+                    <div className="tx-address">→ {tx.to.slice(0, 16)}...</div>
+                    <div className="tx-time">{tx.time}</div>
+                  </div>
+                  <div className="tx-amount">{tx.amount} AETH</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Stats */}
+        <div className="card">
+          <h3 className="card-title">Network Stats</h3>
+          <div className="stats-grid">
+            <div className="stat-item">
+              <div className="stat-value">520+</div>
+              <div className="stat-label">Validators</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">$0</div>
+              <div className="stat-label">Gas Fees</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">190+</div>
+              <div className="stat-label">Countries</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">1,000</div>
+              <div className="stat-label">Free TX/Day</div>
+            </div>
+          </div>
+        </div>
+
+        <footer className="footer">
+          <p>⚡ AETHER - Built to be FREE. Forever.</p>
+          <p style={{ marginTop: '12px' }}>
+            <a href="https://github.com/whiteghostpheonix-web/aether">GitHub</a>
+            <a href="https://aether-dashboard.whiteghostpheonix.workers.dev">Dashboard</a>
+          </p>
+        </footer>
+      </div>
     </div>
   );
 }
-
-const styles = {
-  container: { maxWidth: '500px', margin: '0 auto', padding: '20px', fontFamily: 'sans-serif', background: '#0a0a0f', color: '#e5e5e5', minHeight: '100vh' },
-  header: { textAlign: 'center', padding: '20px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' },
-  title: { margin: 0, fontSize: '28px' },
-  subtitle: { color: '#60a5fa', margin: '4px 0' },
-  card: { background: '#1a1a2e', borderRadius: '12px', padding: '20px', margin: '16px 0', border: '1px solid rgba(255,255,255,0.05)' },
-  balanceRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
-  balanceLabel: { color: '#9ca3af' },
-  balanceAmount: { fontSize: '28px', fontWeight: 'bold', color: '#60a5fa' },
-  addressSection: { marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.05)' },
-  addressLabel: { color: '#6b7280', fontSize: '12px', display: 'block' },
-  addressValue: { fontSize: '12px', wordBreak: 'break-all', fontFamily: 'monospace' },
-  refreshBtn: { marginTop: '10px', padding: '6px 12px', background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.3)', color: '#60a5fa', borderRadius: '4px', cursor: 'pointer' },
-  gasFree: { color: '#10b981', fontSize: '14px', marginBottom: '16px' },
-  input: { width: '100%', padding: '10px', background: '#0a0a1f', border: '1px solid #2a2a4a', borderRadius: '6px', color: '#e5e5e5', marginBottom: '12px', boxSizing: 'border-box' },
-  sendBtn: { width: '100%', padding: '12px', background: '#60a5fa', border: 'none', borderRadius: '6px', color: 'white', fontWeight: 'bold', fontSize: '16px', cursor: 'pointer' },
-  disabled: { opacity: 0.6, cursor: 'not-allowed' },
-  message: { marginTop: '12px', padding: '8px', borderRadius: '4px', textAlign: 'center', background: 'rgba(16,185,129,0.1)', color: '#10b981' },
-  empty: { color: '#6b7280', textAlign: 'center' },
-  txItem: { display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '14px' },
-  txTime: { color: '#6b7280', fontSize: '12px' },
-  footer: { textAlign: 'center', padding: '20px 0', color: '#6b7280', fontSize: '12px' },
-};
 
 export default App;
