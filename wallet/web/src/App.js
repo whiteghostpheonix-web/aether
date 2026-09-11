@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import './App.css';
 import { loadWallet, generateWallet, saveWallet } from './wallet';
+import './index.css';
 
 const API_URL = 'https://aether-api.whiteghostpheonix.workers.dev';
 
@@ -33,10 +33,8 @@ function App() {
       setMessageType('error');
       return;
     }
-
     setLoading(true);
-    setMessage('⏳ Sending...');
-
+    setMessage('⏳ Processing...');
     try {
       const response = await fetch(`${API_URL}/send`, {
         method: 'POST',
@@ -48,17 +46,14 @@ function App() {
           currency: 'AETH',
         }),
       });
-
       const data = await response.json();
-      
       if (response.ok) {
-        setMessage(`✅ Sent ${amount} AETH! Gas: 0 (FREE!)`);
+        setMessage(`✅ Sent ${amount} AETH successfully!`);
         setMessageType('success');
         setTransactions([...transactions, {
           to: toAddress,
           amount: amount,
           time: new Date().toLocaleTimeString(),
-          tx: data.tx_hash ? data.tx_hash.substring(0, 10) : '0x0000'
         }]);
         setToAddress('');
         setAmount('');
@@ -81,96 +76,93 @@ function App() {
     setWallet(newWallet);
     setTransactions([]);
     setBalance(1000 + Math.floor(Math.random() * 9000));
-    setMessage('✅ New anonymous wallet generated!');
+    setMessage('✅ New anonymous wallet created!');
     setMessageType('success');
   };
 
-  if (!wallet) return <div className="app">Loading...</div>;
+  if (!wallet) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#030014',color:'white'}}>Loading...</div>;
 
   return (
     <div className="app">
+      <div className="app-bg">
+        <div className="orb orb-1"></div>
+        <div className="orb orb-2"></div>
+        <div className="orb orb-3"></div>
+      </div>
+
       <header className="header">
         <div className="logo">
-          <span className="logo-icon">⚡</span>
-          <span className="logo-text">AETHER</span>
+          <div className="logo-icon">⚡</div>
+          <div className="logo-text">
+            <div className="logo-title">AETHER</div>
+            <div className="logo-subtitle">Gas-Free Blockchain</div>
+          </div>
         </div>
-        <span className="badge">100% FREE</span>
+        <div className="header-badge">Gas: 0 AETH</div>
       </header>
 
       <div className="container">
-        {/* Balance Card */}
         <div className="card balance-card">
-          <div className="balance-label">Total Balance</div>
+          <div className="balance-header">
+            <span className="balance-label">Total Balance</span>
+          </div>
           <div className="balance-amount">
-            {balance}<span className="balance-currency">AETH</span>
+            {balance.toLocaleString()}
+            <span className="balance-currency">AETH</span>
           </div>
-          
-          <div className="address-display">
-            <span>{wallet.address}</span>
-            <button className="copy-btn" onClick={copyAddress}>
-              {copied ? '✅ Copied' : '📋 Copy'}
-            </button>
-          </div>
-
-          <div className="wallet-actions">
-            <button className="action-btn" onClick={getNewWallet}>
-              🔄 New Wallet
-            </button>
-            <button className="action-btn" onClick={() => setBalance(balance + 100)}>
-              💰 Add 100
+          <div className="address-box">
+            <div className="address-icon">👤</div>
+            <div className="address-text">{wallet.address}</div>
+            <button className={`copy-btn ${copied ? 'copied' : ''}`} onClick={copyAddress}>
+              {copied ? '✓ Copied' : 'Copy'}
             </button>
           </div>
         </div>
 
-        {/* Send Card */}
+        <div className="action-grid">
+          <button className="action-tile">
+            <div className="action-tile-icon">📤</div>
+            <span>Send</span>
+          </button>
+          <button className="action-tile">
+            <div className="action-tile-icon">📥</div>
+            <span>Receive</span>
+          </button>
+          <button className="action-tile">
+            <div className="action-tile-icon">🔄</div>
+            <span>Swap</span>
+          </button>
+          <button className="action-tile" onClick={getNewWallet}>
+            <div className="action-tile-icon">✨</div>
+            <span>New</span>
+          </button>
+        </div>
+
         <div className="card">
           <h3 className="card-title">Send AETH</h3>
-          <div className="gas-badge">Gas: 0 AETH (FREE!)</div>
-
+          <p className="card-subtitle">Transfer funds instantly with zero fees</p>
+          <div className="gas-pill">Gas: 0 AETH</div>
           <div className="input-group">
             <label className="input-label">Recipient Address</label>
-            <input
-              type="text"
-              className="input"
-              placeholder="0x..."
-              value={toAddress}
-              onChange={(e) => setToAddress(e.target.value)}
-            />
+            <input type="text" className="input" placeholder="0x..." value={toAddress} onChange={(e) => setToAddress(e.target.value)} />
           </div>
-
           <div className="input-group">
-            <label className="input-label">Amount (AETH)</label>
-            <input
-              type="number"
-              className="input"
-              placeholder="0"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
+            <label className="input-label">Amount</label>
+            <input type="number" className="input" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
-
-          <button
-            className="send-btn"
-            onClick={sendTransaction}
-            disabled={loading}
-          >
-            {loading ? '⏳ Sending...' : '🚀 Send (FREE)'}
+          <button className="send-btn" onClick={sendTransaction} disabled={loading}>
+            {loading ? '⏳ Processing...' : '🚀 Send Now'}
           </button>
-
-          {message && (
-            <div className={`message ${messageType}`}>
-              {message}
-            </div>
-          )}
+          {message && <div className={`message ${messageType}`}>{message}</div>}
         </div>
 
-        {/* Transactions */}
         <div className="card">
-          <h3 className="card-title">Recent Transactions</h3>
+          <h3 className="card-title">Recent Activity</h3>
+          <p className="card-subtitle">Your latest transactions</p>
           {transactions.length === 0 ? (
             <div className="empty-state">
               <div className="empty-icon">📭</div>
-              <p>No transactions yet</p>
+              <div className="empty-text">No transactions yet</div>
             </div>
           ) : (
             <div className="tx-list">
@@ -181,42 +173,31 @@ function App() {
                     <div className="tx-address">→ {tx.to.slice(0, 16)}...</div>
                     <div className="tx-time">{tx.time}</div>
                   </div>
-                  <div className="tx-amount">{tx.amount} AETH</div>
+                  <div className="tx-amount">-{tx.amount} AETH</div>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {/* Stats */}
         <div className="card">
-          <h3 className="card-title">Network Stats</h3>
+          <h3 className="card-title">Network Overview</h3>
+          <p className="card-subtitle">Live Aether network statistics</p>
           <div className="stats-grid">
-            <div className="stat-item">
-              <div className="stat-value">520+</div>
-              <div className="stat-label">Validators</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-value">$0</div>
-              <div className="stat-label">Gas Fees</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-value">190+</div>
-              <div className="stat-label">Countries</div>
-            </div>
-            <div className="stat-item">
-              <div className="stat-value">1,000</div>
-              <div className="stat-label">Free TX/Day</div>
-            </div>
+            <div className="stat-item"><div className="stat-value">520+</div><div className="stat-label">Validators</div></div>
+            <div className="stat-item"><div className="stat-value">$0</div><div className="stat-label">Gas Fees</div></div>
+            <div className="stat-item"><div className="stat-value">190+</div><div className="stat-label">Countries</div></div>
+            <div className="stat-item"><div className="stat-value">1,000</div><div className="stat-label">Free TX/Day</div></div>
           </div>
         </div>
 
         <footer className="footer">
-          <p>⚡ AETHER - Built to be FREE. Forever.</p>
-          <p style={{ marginTop: '12px' }}>
+          <div className="footer-brand">⚡ AETHER</div>
+          <p>Built to be FREE. Forever.</p>
+          <div className="footer-links">
             <a href="https://github.com/whiteghostpheonix-web/aether">GitHub</a>
             <a href="https://aether-dashboard.whiteghostpheonix.workers.dev">Dashboard</a>
-          </p>
+          </div>
         </footer>
       </div>
     </div>
