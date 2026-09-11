@@ -4,7 +4,7 @@ const API_URL = 'https://aether-api.whiteghostpheonix.workers.dev';
 
 function App() {
   const [address, setAddress] = useState('');
-  const [balance, setBalance] = useState(0);
+  const [balance, setBalance] = useState(1000);
   const [toAddress, setToAddress] = useState('');
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
@@ -12,12 +12,10 @@ function App() {
   const [transactions, setTransactions] = useState([]);
 
   useEffect(() => {
-    // Generate a REAL random address
     const randomAddr = '0x' + Array.from({length: 40}, () => 
       Math.floor(Math.random() * 16).toString(16)
     ).join('');
     setAddress(randomAddr);
-    setBalance(1000);
   }, []);
 
   const sendTransaction = async () => {
@@ -27,7 +25,7 @@ function App() {
     }
 
     setLoading(true);
-    setMessage('');
+    setMessage('⏳ Sending...');
 
     try {
       const response = await fetch(`${API_URL}/send`, {
@@ -49,7 +47,7 @@ function App() {
           to: toAddress,
           amount: amount,
           time: new Date().toLocaleTimeString(),
-          tx: data.tx_hash || '0x' + Math.random().toString(16).substring(2, 10)
+          tx: data.tx_hash ? data.tx_hash.substring(0, 10) : '0x0000'
         }]);
         setToAddress('');
         setAmount('');
@@ -69,7 +67,7 @@ function App() {
       const response = await fetch(`${API_URL}/balance?address=${address}`);
       const data = await response.json();
       setBalance(data.balance || 1000);
-      setMessage(`✅ Balance updated: ${data.balance || 1000} AETH`);
+      setMessage(`✅ Balance: ${data.balance || 1000} AETH`);
     } catch (error) {
       setMessage('❌ Using local balance');
     }
