@@ -1,0 +1,11 @@
+name = "aether-api"
+main = "workers/api/index.js"
+compatibility_date = "2026-09-07"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "aether-db"
+database_id = "13fbld59-259f-4857-9a32-d24d48cad7ab"
+
+[vars]
+ENVIRONMENT = "production"

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { biometric } from './biometric';
 
 const API_URL = 'https://aether-api.whiteghostpheonix.workers.dev';
+const SIM_URL = 'https://aether-sim-auth.whiteghostpheonix.workers.dev';
 
 export default function Verify({ onVerified, wallet }) {
   const [step, setStep] = useState('choose');
@@ -11,7 +12,6 @@ export default function Verify({ onVerified, wallet }) {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [code, setCode] = useState('');
 
-  // ─── HANDLE DIGITAL BIOMETRIC ─────────────────────────
   const handleBiometric = async (type) => {
     setMethod(type);
     setLoading(true);
@@ -29,8 +29,7 @@ export default function Verify({ onVerified, wallet }) {
 
     if (result && result.success) {
       setMessage(`✅ ${type} verified! (Trust: ${result.trust}%)`);
-      
-      // Save to D1
+
       try {
         await fetch(`${API_URL}/verify`, {
           method: 'POST',
@@ -51,7 +50,6 @@ export default function Verify({ onVerified, wallet }) {
     setLoading(false);
   };
 
-  // ─── HANDLE BUTTON PHONE ────────────────────────────────
   const handleButtonPhone = async (type) => {
     if (!phoneNumber) {
       setMessage('❌ Please enter your phone number');
@@ -68,19 +66,28 @@ export default function Verify({ onVerified, wallet }) {
         sim: '/verify',
       }[type];
 
-      const response = await fetch(
-        `https://aether-sim-auth.whiteghostpheonix.workers.dev${endpoint}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: phoneNumber }),
-        }
-      );
+      const response = await fetch(`${SIM_URL}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phoneNumber }),
+      });
 
       const data = await response.json();
 
       if (type === 'sim') {
         setMessage(`✅ SIM verified! (Trust: ${data.trustScore}%)`);
+        try {
+          await fetch(`${API_URL}/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              address: wallet.address,
+              method: 'sim',
+              hash: data.identityHash,
+              trust: data.trustScore,
+            }),
+          });
+        } catch (err) {}
         setTimeout(() => onVerified({ method: 'sim', trust: data.trustScore }), 1500);
       } else {
         setCode(data.code);
@@ -93,91 +100,32 @@ export default function Verify({ onVerified, wallet }) {
     setLoading(false);
   };
 
-  // ─── CONFIRM CODE ──────────────────────────────────────
-  const confirmCode = () => {
+  const confirmCode = async () => {
     if (code === '' || code.length < 6) {
       setMessage('❌ Enter the 6-digit code');
       return;
     }
     setMessage(`✅ Verified with ${method}!`);
+    try {
+      await fetch(`${API_URL}/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address: wallet.address,
+          method: method,
+          hash: code,
+          trust: 85,
+        }),
+      });
+    } catch (err) {}
     setTimeout(() => onVerified({ method, trust: 85 }), 1500);
   };
-
-  // ─── RENDER ────────────────────────────────────────────
-  if (step === 'choose') {
-    return (
-      <div className="card">
-        <h3 className="card-title">🔐 Verify Identity</h3>
-        <p className="card-subtitle">Choose a verification method</p>
-
-        <h4 style={{ color: '#00E5FF', marginTop: '16px', marginBottom: '12px', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          📱 Smart Devices
-        </h4>
-
-        <div className="action-grid">
-          <button className="action-tile" onClick={() => handleBiometric('fingerprint')} disabled={loading}>
-            <div className="action-tile-icon">🖐️</div>
-            <span>Fingerprint</span>
-          </button>
-          <button className="action-tile" onClick={() => handleBiometric('eye')} disabled={loading}>
-            <div className="action-tile-icon">👁️</div>
-            <span>Eye</span>
-          </button>
-          <button className="action-tile" onClick={() => handleBiometric('face')} disabled={loading}>
-            <div className="action-tile-icon">😊</div>
-            <span>Face</span>
-          </button>
-          <button className="action-tile" onClick={() => handleBiometric('voice')} disabled={loading}>
-            <div className="action-tile-icon">🎤</div>
-            <span>Voice</span>
-          </button>
-        </div>
-
-        <h4 style={{ color: '#FFB800', marginTop: '24px', marginBottom: '12px', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          📟 Button Phones
-        </h4>
-
-        <div className="input-group">
-          <label className="input-label">Your Phone Number</label>
-          <input
-            type="tel"
-            className="input"
-            placeholder="+256..."
-            value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
-          />
-        </div>
-
-        <div className="action-grid">
-          <button className="action-tile" onClick={() => handleButtonPhone('sim')} disabled={loading}>
-            <div className="action-tile-icon">🔢</div>
-            <span>SIM</span>
-          </button>
-          <button className="action-tile" onClick={() => handleButtonPhone('call')} disabled={loading}>
-            <div className="action-tile-icon">📞</div>
-            <span>Call</span>
-          </button>
-          <button className="action-tile" onClick={() => handleButtonPhone('sms')} disabled={loading}>
-            <div className="action-tile-icon">💬</div>
-            <span>SMS</span>
-          </button>
-          <button className="action-tile" onClick={() => handleButtonPhone('ussd')} disabled={loading}>
-            <div className="action-tile-icon">*️⃣</div>
-            <span>USSD</span>
-          </button>
-        </div>
-
-        {message && <div className="message success">{message}</div>}
-      </div>
-    );
-  }
 
   if (step === 'verify-code') {
     return (
       <div className="card">
-        <h3 className="card-title">📲 Enter Verification Code</h3>
+        <h3 className="card-title">📲 Enter Code</h3>
         <p className="card-subtitle">{message}</p>
-
         <div className="input-group">
           <label className="input-label">6-Digit Code</label>
           <input
@@ -190,14 +138,78 @@ export default function Verify({ onVerified, wallet }) {
             style={{ textAlign: 'center', fontSize: '24px', letterSpacing: '0.5em' }}
           />
         </div>
-
         <button className="send-btn" onClick={confirmCode}>✅ Confirm</button>
         <button className="action-btn" style={{ marginTop: '8px', width: '100%' }} onClick={() => setStep('choose')}>
           ← Back
         </button>
+        {message && <div className="message success">{message}</div>}
       </div>
     );
   }
 
-  return null;
+  return (
+    <div className="card">
+      <h3 className="card-title">🔐 Verify Identity</h3>
+      <p className="card-subtitle">Choose a verification method</p>
+
+      <h4 style={{ color: '#00E5FF', marginTop: '16px', marginBottom: '12px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        📱 Smart Devices
+      </h4>
+
+      <div className="action-grid">
+        <button className="action-tile" onClick={() => handleBiometric('fingerprint')} disabled={loading}>
+          <div className="action-tile-icon">🖐️</div>
+          <span>Finger</span>
+        </button>
+        <button className="action-tile" onClick={() => handleBiometric('eye')} disabled={loading}>
+          <div className="action-tile-icon">👁️</div>
+          <span>Eye</span>
+        </button>
+        <button className="action-tile" onClick={() => handleBiometric('face')} disabled={loading}>
+          <div className="action-tile-icon">😊</div>
+          <span>Face</span>
+        </button>
+        <button className="action-tile" onClick={() => handleBiometric('voice')} disabled={loading}>
+          <div className="action-tile-icon">🎤</div>
+          <span>Voice</span>
+        </button>
+      </div>
+
+      <h4 style={{ color: '#FFB800', marginTop: '24px', marginBottom: '12px', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        📟 Button Phones
+      </h4>
+
+      <div className="input-group">
+        <label className="input-label">Phone Number</label>
+        <input
+          type="tel"
+          className="input"
+          placeholder="+256744557693"
+          value={phoneNumber}
+          onChange={(e) => setPhoneNumber(e.target.value)}
+        />
+      </div>
+
+      <div className="action-grid">
+        <button className="action-tile" onClick={() => handleButtonPhone('sim')} disabled={loading}>
+          <div className="action-tile-icon">🔢</div>
+          <span>SIM</span>
+        </button>
+        <button className="action-tile" onClick={() => handleButtonPhone('call')} disabled={loading}>
+          <div className="action-tile-icon">📞</div>
+          <span>Call</span>
+        </button>
+        <button className="action-tile" onClick={() => handleButtonPhone('sms')} disabled={loading}>
+          <div className="action-tile-icon">💬</div>
+          <span>SMS</span>
+        </button>
+        <button className="action-tile" onClick={() => handleButtonPhone('ussd')} disabled={loading}>
+          <div className="action-tile-icon">*️⃣</div>
+          <span>USSD</span>
+        </button>
+      </div>
+
+      {message && <div className="message success">{message}</div>}
+    </div>
+  );
 }

@@ -1,0 +1,5 @@
+{
+  "name": "aether-ussd",
+  "compatibility_date": "2026-09-07",
+  "main": "workers/ussd/index.js"
+}
