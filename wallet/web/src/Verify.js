@@ -4,11 +4,12 @@ import { biometric } from './biometric';
 const API_URL = 'https://aether-api.whiteghostpheonix.workers.dev';
 const SIM_URL = 'https://aether-sim-auth.whiteghostpheonix.workers.dev';
 
-export default function Verify({ onVerified, wallet }) {
+export default function Verify({ onVerified, wallet, onSkip }) {
   const [step, setStep] = useState('choose');
   const [method, setMethod] = useState(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageType, setMessageType] = useState('success');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [code, setCode] = useState('');
 
@@ -16,6 +17,7 @@ export default function Verify({ onVerified, wallet }) {
     setMethod(type);
     setLoading(true);
     setMessage(`⏳ Capturing ${type}...`);
+    setMessageType('success');
 
     let result;
     try {
@@ -28,8 +30,8 @@ export default function Verify({ onVerified, wallet }) {
     }
 
     if (result && result.success) {
-      setMessage(`✅ ${type} verified! (Trust: ${result.trust}%)`);
-
+      setMessage(`✅ ${type} verified! Trust: ${result.trust}%`);
+      setMessageType('success');
       try {
         await fetch(`${API_URL}/verify`, {
           method: 'POST',
@@ -42,40 +44,35 @@ export default function Verify({ onVerified, wallet }) {
           }),
         });
       } catch (err) {}
-
       setTimeout(() => onVerified({ method: type, trust: result.trust }), 1500);
     } else {
       setMessage(`❌ ${type} failed: ${result?.error || 'Try again'}`);
+      setMessageType('error');
     }
     setLoading(false);
   };
 
   const handleButtonPhone = async (type) => {
     if (!phoneNumber) {
-      setMessage('❌ Please enter your phone number');
+      setMessage('❌ Enter your phone number');
+      setMessageType('error');
       return;
     }
     setMethod(type);
     setLoading(true);
 
     try {
-      const endpoint = {
-        call: '/voice-verify',
-        sms: '/sms-verify',
-        ussd: '/ussd-verify',
-        sim: '/verify',
-      }[type];
-
+      const endpoint = { call: '/voice-verify', sms: '/sms-verify', ussd: '/ussd-verify', sim: '/verify' }[type];
       const response = await fetch(`${SIM_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: phoneNumber }),
       });
-
       const data = await response.json();
 
       if (type === 'sim') {
-        setMessage(`✅ SIM verified! (Trust: ${data.trustScore}%)`);
+        setMessage(`✅ SIM verified! Trust: ${data.trustScore}%`);
+        setMessageType('success');
         try {
           await fetch(`${API_URL}/verify`, {
             method: 'POST',
@@ -92,10 +89,12 @@ export default function Verify({ onVerified, wallet }) {
       } else {
         setCode(data.code);
         setMessage(`📱 ${data.instruction}`);
+        setMessageType('success');
         setStep('verify-code');
       }
     } catch (err) {
       setMessage(`❌ Failed: ${err.message}`);
+      setMessageType('error');
     }
     setLoading(false);
   };
@@ -103,19 +102,16 @@ export default function Verify({ onVerified, wallet }) {
   const confirmCode = async () => {
     if (code === '' || code.length < 6) {
       setMessage('❌ Enter the 6-digit code');
+      setMessageType('error');
       return;
     }
     setMessage(`✅ Verified with ${method}!`);
+    setMessageType('success');
     try {
       await fetch(`${API_URL}/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          address: wallet.address,
-          method: method,
-          hash: code,
-          trust: 85,
-        }),
+        body: JSON.stringify({ address: wallet.address, method: method, hash: code, trust: 85 }),
       });
     } catch (err) {}
     setTimeout(() => onVerified({ method, trust: 85 }), 1500);
@@ -142,7 +138,6 @@ export default function Verify({ onVerified, wallet }) {
         <button className="action-btn" style={{ marginTop: '8px', width: '100%' }} onClick={() => setStep('choose')}>
           ← Back
         </button>
-        {message && <div className="message success">{message}</div>}
       </div>
     );
   }
@@ -209,7 +204,17 @@ export default function Verify({ onVerified, wallet }) {
         </button>
       </div>
 
-      {message && <div className="message success">{message}</div>}
+      {message && <div className={`message ${messageType}`}>{message}</div>}
+
+      {onSkip && (
+        <button
+          className="action-btn"
+          style={{ marginTop: '16px', width: '100%' }}
+          onClick={onSkip}
+        >
+          Skip for now →
+        </button>
+      )}
     </div>
   );
 }
