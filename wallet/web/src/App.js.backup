@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { loadWallet, generateWallet, saveWallet } from './wallet';
 import Verify from './Verify';
-import FounderLogin from './FounderLogin';
 import './index.css';
 
 const API_URL = 'https://aether-api.whiteghostpheonix.workers.dev';
@@ -11,10 +10,8 @@ function App() {
   const [balance, setBalance] = useState(0);
   const [balanceDisplay, setBalanceDisplay] = useState('0');
   const [isInfinite, setIsInfinite] = useState(false);
-  const [isFounder, setIsFounder] = useState(false);
   const [verified, setVerified] = useState(false);
   const [needsVerify, setNeedsVerify] = useState(false);
-  const [showFounderLogin, setShowFounderLogin] = useState(false);
   const [toAddress, setToAddress] = useState('');
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
@@ -24,52 +21,17 @@ function App() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    // Check for founder login page request
-    if (window.location.pathname === '/founder' || window.location.hash === '#founder') {
-      setShowFounderLogin(true);
-      return;
-    }
-
     const w = loadWallet();
     setWallet(w);
-
-    if (w.isFounder) {
-      // Founder is logged in
-      setIsFounder(true);
+    // Check if already verified
+    const savedVerified = localStorage.getItem('aether_verified');
+    if (savedVerified === 'true') {
       setVerified(true);
-      setNeedsVerify(false);
-      loadFounderData(w);
+      loadUserData(w);
     } else {
-      // Regular user flow
-      const savedVerified = localStorage.getItem('aether_verified');
-      if (savedVerified === 'true') {
-        setVerified(true);
-        loadUserData(w);
-      } else {
-        setNeedsVerify(true);
-      }
+      setNeedsVerify(true);
     }
   }, []);
-
-  const loadFounderData = async (w) => {
-    try {
-      const userRes = await fetch(`${API_URL}/user?address=${w.address}`);
-      if (userRes.ok) {
-        const data = await userRes.json();
-        if (data.wallet) {
-          setIsInfinite(true);
-          setBalanceDisplay('∞');
-        }
-      }
-      const txRes = await fetch(`${API_URL}/transactions?address=${w.address}`);
-      if (txRes.ok) {
-        const txData = await txRes.json();
-        setTransactions(txData.transactions || []);
-      }
-    } catch (err) {
-      setBalanceDisplay('∞');
-    }
-  };
 
   const loadUserData = async (w) => {
     try {
@@ -77,8 +39,9 @@ function App() {
       if (userRes.ok) {
         const data = await userRes.json();
         if (data.wallet) {
-          setIsInfinite(data.wallet.is_infinite === true);
-          setBalanceDisplay(data.wallet.is_infinite ? '∞' : (data.wallet.balance || 0).toLocaleString());
+          setIsInfinite(data.wallet.is_infinite === 1);
+          setBalance(data.wallet.balance);
+          setBalanceDisplay(data.wallet.is_infinite ? '∞' : data.wallet.balance.toLocaleString());
         }
       }
       const txRes = await fetch(`${API_URL}/transactions?address=${w.address}`);
@@ -96,6 +59,7 @@ function App() {
     localStorage.setItem('aether_biometric_hash', data.hash);
     localStorage.setItem('aether_method', data.method);
 
+    // Register user with biometric hash
     try {
       const res = await fetch(`${API_URL}/register`, {
         method: 'POST',
@@ -110,8 +74,9 @@ function App() {
       });
       const result = await res.json();
       if (result.wallet) {
-        setIsInfinite(result.wallet.is_infinite === true || result.wallet.is_infinite === 1);
-        setBalanceDisplay(result.wallet.is_infinite ? '∞' : '0');
+        setIsInfinite(result.wallet.is_infinite === 1);
+        setBalance(result.wallet.balance);
+        setBalanceDisplay(result.wallet.is_infinite ? '∞' : result.wallet.balance.toLocaleString());
       }
       setMessage(`✅ Verified via ${data.method} (${data.trust}%)`);
       setMessageType('success');
@@ -154,10 +119,9 @@ function App() {
         setTransactions([{ to_address: toAddress, amount: parseInt(amount), timestamp: Math.floor(Date.now() / 1000) }, ...transactions]);
         setToAddress('');
         setAmount('');
-        if (!isInfinite && !isFounder) {
-          const newBalance = Math.max(0, balance - parseInt(amount));
-          setBalance(newBalance);
-          setBalanceDisplay(newBalance.toLocaleString());
+        if (!isInfinite) {
+          setBalance(balance - parseInt(amount));
+          setBalanceDisplay((balance - parseInt(amount)).toLocaleString());
         }
       } else {
         setMessage(`❌ ${data.error || 'Failed'}`);
@@ -171,29 +135,10 @@ function App() {
     }
   };
 
-  const logoutFounder = () => {
-    localStorage.removeItem('aether_wallet');
-    localStorage.removeItem('aether_verified');
-    window.location.href = '/';
-  };
+  if (!wallet) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#030014', color: 'white' }}>Loading...</div>;
 
-  const clearAndStartFresh = () => {
-    localStorage.removeItem('aether_wallet');
-    localStorage.removeItem('aether_verified');
-    const newWallet = generateWallet();
-    saveWallet(newWallet);
-    window.location.reload();
-  };
-
-  if (!wallet && !showFounderLogin) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#030014', color: 'white' }}>Loading...</div>;
-
-  // FOUNDER LOGIN PAGE
-  if (showFounderLogin) {
-    return <FounderLogin />;
-  }
-
-  // BIOMETRIC VERIFY SCREEN (regular users)
-  if (needsVerify && !verified) {
+  // BIOMETRIC-FIRST: Show verify screen before anything else
+  if (needsVerify || !verified) {
     return (
       <div className="app">
         <div className="app-bg">
@@ -215,18 +160,14 @@ function App() {
           <div className="card" style={{ textAlign: 'center', padding: '32px 24px' }}>
             <div style={{ fontSize: '48px', marginBottom: '16px' }}>🔐</div>
             <h2 className="card-title" style={{ fontSize: '22px' }}>Verify Identity First</h2>
-            <p className="card-subtitle">One biometric = One account</p>
+            <p className="card-subtitle" style={{ marginBottom: '8px' }}>
+              One biometric = One account. This prevents multiple accounts.
+            </p>
+            <p style={{ color: '#FFB800', fontSize: '12px', marginBottom: '16px' }}>
+              Your biometric is your identity. It cannot be used twice.
+            </p>
           </div>
           <Verify wallet={wallet} onVerified={handleVerified} />
-          
-          <div className="card" style={{ textAlign: 'center', marginTop: '16px' }}>
-            <p style={{ color: '#FFB800', fontSize: '13px', marginBottom: '12px' }}>
-              👑 Founder?
-            </p>
-            <a href="/founder" style={{ color: '#FFB800', fontWeight: 'bold', textDecoration: 'underline' }}>
-              Login as Founder →
-            </a>
-          </div>
         </div>
       </div>
     );
@@ -249,21 +190,21 @@ function App() {
             <div className="logo-subtitle">Gas-Free Blockchain</div>
           </div>
         </div>
-        <div className="header-badge" style={isFounder ? { background: 'linear-gradient(135deg, #FFB800, #CC9200)' } : {}}>
-          {isFounder ? '👑 FOUNDER' : '✓ VERIFIED'}
+        <div className="header-badge">
+          {isInfinite ? '👑 FOUNDER' : '✓ VERIFIED'}
         </div>
       </header>
 
       <div className="container">
-        <div className="card balance-card" style={isFounder ? { borderColor: '#FFB800', boxShadow: '0 0 40px rgba(255, 184, 0, 0.3)' } : {}}>
+        <div className="card balance-card">
           <div className="balance-header">
-            <span className="balance-label">{isFounder ? 'Founder Balance' : 'Total Balance'}</span>
+            <span className="balance-label">{isInfinite ? 'Founder Balance' : 'Total Balance'}</span>
           </div>
-          <div className="balance-amount" style={isFounder ? { background: 'linear-gradient(135deg, #FFB800, #CC9200)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' } : {}}>
+          <div className="balance-amount">
             {balanceDisplay}
             <span className="balance-currency">AETH</span>
           </div>
-          {isFounder && (
+          {isInfinite && (
             <p style={{ color: '#FFB800', fontSize: '12px', marginTop: '8px', textAlign: 'center' }}>
               👑 Unlimited balance — hidden from other users
             </p>
@@ -316,17 +257,6 @@ function App() {
                 </div>
               ))}
             </div>
-          )}
-        </div>
-
-        <div className="card" style={{ textAlign: 'center' }}>
-          <button onClick={clearAndStartFresh} style={{ background: 'rgba(96, 165, 250, 0.1)', color: '#60a5fa', border: '1px solid rgba(96, 165, 250, 0.3)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', marginRight: '8px' }}>
-            ✨ New Wallet
-          </button>
-          {isFounder && (
-            <button onClick={logoutFounder} style={{ background: 'rgba(255, 184, 0, 0.1)', color: '#FFB800', border: '1px solid rgba(255, 184, 0, 0.3)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer' }}>
-              🚪 Logout Founder
-            </button>
           )}
         </div>
 
